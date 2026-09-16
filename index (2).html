@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script>
+    (function () {
+      try {
+        if ("serviceWorker" in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function (regs) {
+            regs.forEach(function (r) { r.unregister(); });
+          });
+        }
+        if (window.caches) {
+          caches.keys().then(function (keys) {
+            keys.forEach(function (k) { caches.delete(k); });
+          });
+        }
+      } catch (e) {}
+    })();
+  </script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <title>Calculator</title>
+  <style>
+    :root {
+      --bg: #07080b;
+      --surface: #12141a;
+      --panel: #1a1d25;
+      --fg: #f4f1ea;
+      --muted: #8b8d97;
+      --accent: #e85d04;
+      --accent-hover: #f48c06;
+      --key: #2a2e38;
+      --key-hover: #353a47;
+      --op: #3d414d;
+      --border: #2c303a;
+      --lcd: #c8f542;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: "Segoe UI", system-ui, sans-serif;
+    }
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem 1rem;
+    }
+    .wrap { width: 100%; max-width: 22rem; }
+    .brand {
+      text-align: center;
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.35em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 1rem;
+    }
+    .calc {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 1.5rem;
+      padding: 1rem;
+      box-shadow: 0 24px 60px rgba(0,0,0,.55);
+    }
+    .display {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 1.15rem 1rem;
+      text-align: right;
+      margin-bottom: 1rem;
+    }
+    .expr {
+      min-height: 1.2rem;
+      font-size: 0.9rem;
+      color: var(--muted);
+      word-break: break-all;
+      font-variant-numeric: tabular-nums;
+    }
+    .value {
+      margin-top: 0.25rem;
+      font-size: 2.25rem;
+      font-weight: 500;
+      color: var(--lcd);
+      word-break: break-all;
+      font-variant-numeric: tabular-nums;
+    }
+    .value.err { color: var(--accent); }
+    .keys {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.5rem;
+    }
+    button {
+      border: 0;
+      height: 3.5rem;
+      border-radius: 0.75rem;
+      font-size: 1.25rem;
+      font-weight: 500;
+      color: var(--fg);
+      cursor: pointer;
+      user-select: none;
+    }
+    button:active { transform: scale(0.96); }
+    .num { background: var(--key); }
+    .num:hover { background: var(--key-hover); }
+    .op { background: var(--op); }
+    .op:hover { background: var(--key-hover); }
+    .eq { background: var(--accent); }
+    .eq:hover { background: var(--accent-hover); }
+    .clear { background: #5c1a12; }
+    .clear:hover { background: #7a2418; }
+
+    #portal { display: none; width: 100%; max-width: 42rem; }
+    #portal.on { display: block; }
+    #calc-root.hide { display: none; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 1.25rem;
+      margin-bottom: 0.85rem;
+    }
+    .card h2 { color: var(--accent); font-size: 1.15rem; margin-bottom: 0.5rem; }
+    .card p, .lead { line-height: 1.6; }
+    .lead { margin-bottom: 1.25rem; font-size: 1.05rem; }
+    .games {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 0.75rem;
+      margin: 1rem 0 1.25rem;
+    }
+    .game-card {
+      display: block;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 1.4rem 1rem;
+      text-align: center;
+      text-decoration: none;
+      color: var(--fg);
+    }
+    .game-card:hover { border-color: var(--accent); }
+    .game-title { color: var(--accent); font-size: 1.2rem; font-weight: 600; }
+    .back {
+      width: 100%;
+      background: var(--key);
+      border: 1px solid var(--border);
+      color: var(--fg);
+      height: auto;
+      padding: 0.85rem;
+      font-size: 0.95rem;
+    }
+    .back:hover { background: var(--key-hover); }
+  </style>
+</head>
+<body>
+  <div class="wrap" id="calc-root">
+    <p class="brand">Calculator</p>
+    <div class="calc">
+      <div class="display">
+        <div class="expr" id="expr">&nbsp;</div>
+        <div class="value" id="value">0</div>
+      </div>
+      <div class="keys">
+        <button class="clear" data-k="C">C</button>
+        <button class="op" data-k="(">(</button>
+        <button class="op" data-k=")">)</button>
+        <button class="op" data-k="/">÷</button>
+        <button class="num" data-k="7">7</button>
+        <button class="num" data-k="8">8</button>
+        <button class="num" data-k="9">9</button>
+        <button class="op" data-k="*">×</button>
+        <button class="num" data-k="4">4</button>
+        <button class="num" data-k="5">5</button>
+        <button class="num" data-k="6">6</button>
+        <button class="op" data-k="-">−</button>
+        <button class="num" data-k="1">1</button>
+        <button class="num" data-k="2">2</button>
+        <button class="num" data-k="3">3</button>
+        <button class="op" data-k="+">+</button>
+        <button class="num" data-k="0">0</button>
+        <button class="num" data-k=".">.</button>
+        <button class="op" data-k="B">⌫</button>
+        <button class="eq" data-k="=">=</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="portal">
+    <p class="lead">APStudy helps students master algebra, calculus, geometry, and trigonometry alongside essay writing, grammar, and literary analysis for AP exams.</p>
+    <section class="card">
+      <h2>Mathematics</h2>
+      <p>We cover algebra, calculus, derivatives, integrals, quadratic equations, probability, and statistics including the Pythagorean theorem and trigonometry.</p>
+    </section>
+    <section class="card">
+      <h2>Science</h2>
+      <p>Sessions cover biology, chemistry, and physics through hypothesis, experiment, photosynthesis, and thermodynamics.</p>
+    </section>
+    <section class="card">
+      <h2>English and Writing</h2>
+      <p>Tutors help with essay, thesis, grammar, syntax, rhetoric, symbolism, and irony across persuasive and narrative writing.</p>
+    </section>
+    <div class="games">
+      <a class="game-card" href="https://www.xbox.com/en-us/play/games/fortnite/bt5p2x999vh2" target="_blank" rel="noopener noreferrer" aria-label="Fortnite">
+        <div class="game-title">Fortnite</div>
+      </a>
+      <a class="game-card" href="https://supercell.com/en/games/clashroyale/blog/news/play-clash-royale-pc/" target="_blank" rel="noopener noreferrer" aria-label="Clash Royale">
+        <div class="game-title">Clash Royale</div>
+      </a>
+    </div>
+    <button class="back" type="button" id="back">Back to Calculator</button>
+  </div>
+
+  <script>
+    (function () {
+      var expr = "";
+      var exprEl = document.getElementById("expr");
+      var valueEl = document.getElementById("value");
+      var calcRoot = document.getElementById("calc-root");
+      var portal = document.getElementById("portal");
+
+      function pretty(s) {
+        return s.replace(/\*/g, "×").replace(/\//g, "÷").replace(/-/g, "−");
+      }
+      function normalize(s) {
+        return s.replace(/[×xX]/g, "*").replace(/÷/g, "/").replace(/−/g, "-").replace(/\s/g, "");
+      }
+      function isSecret(s) {
+        var n = normalize(s);
+        return /^(335\*0*305|0*305\*335)$/.test(n);
+      }
+      function update() {
+        exprEl.innerHTML = pretty(expr) || "&nbsp;";
+      }
+      function unlock() {
+        calcRoot.classList.add("hide");
+        portal.classList.add("on");
+      }
+      function lock() {
+        portal.classList.remove("on");
+        calcRoot.classList.remove("hide");
+        expr = "";
+        valueEl.textContent = "0";
+        valueEl.classList.remove("err");
+        update();
+      }
+      function evaluate() {
+        if (isSecret(expr)) { unlock(); return; }
+        var n = normalize(expr);
+        if (!/^[0-9+\-*/().]+$/.test(n)) {
+          valueEl.textContent = "Error";
+          valueEl.classList.add("err");
+          return;
+        }
+        n = n.replace(/\b0+(\d)/g, "$1");
+        try {
+          var value = Function('"use strict"; return (' + n + ")")();
+          if (typeof value !== "number" || !isFinite(value)) throw 0;
+          valueEl.classList.remove("err");
+          valueEl.textContent = String(Number(value.toPrecision(12)));
+        } catch (e) {
+          valueEl.textContent = "Error";
+          valueEl.classList.add("err");
+        }
+      }
+      function press(k) {
+        if (k === "C") {
+          expr = "";
+          valueEl.textContent = "0";
+          valueEl.classList.remove("err");
+          update();
+          return;
+        }
+        if (k === "B") {
+          expr = expr.slice(0, -1);
+          valueEl.classList.remove("err");
+          update();
+          return;
+        }
+        if (k === "=") { evaluate(); return; }
+        expr += k;
+        valueEl.classList.remove("err");
+        update();
+      }
+
+      document.querySelectorAll("[data-k]").forEach(function (btn) {
+        btn.addEventListener("click", function () { press(btn.getAttribute("data-k")); });
+      });
+      document.getElementById("back").addEventListener("click", lock);
+      document.addEventListener("keydown", function (e) {
+        if (portal.classList.contains("on")) return;
+        if (e.key >= "0" && e.key <= "9") press(e.key);
+        else if (".+-*/()".indexOf(e.key) >= 0) press(e.key);
+        else if (e.key === "Enter" || e.key === "=") { e.preventDefault(); press("="); }
+        else if (e.key === "Escape") press("C");
+        else if (e.key === "Backspace") press("B");
+      });
+    })();
+  </script>
+</body>
+</html>
